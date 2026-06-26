@@ -110,7 +110,7 @@ def _ensure_finishable(entry: MoodEntry) -> None:
         )
 
 
-async def get_entry(session: AsyncSession, device_id: uuid.UUID, entry_id: uuid.UUID) -> MoodEntry:
+async def get_entry(session: AsyncSession, device_id: str, entry_id: uuid.UUID) -> MoodEntry:
     """Load an entry scoped to the device; foreign/missing -> 404."""
     entry = await session.scalar(
         select(MoodEntry).where(MoodEntry.id == entry_id, MoodEntry.device_id == device_id)
@@ -121,7 +121,7 @@ async def get_entry(session: AsyncSession, device_id: uuid.UUID, entry_id: uuid.
 
 
 async def _get_entry_for_update(
-    session: AsyncSession, device_id: uuid.UUID, entry_id: uuid.UUID
+    session: AsyncSession, device_id: str, entry_id: uuid.UUID
 ) -> MoodEntry:
     """Load an entry scoped to the device, locking its row (FOR UPDATE OF mood_entries).
 
@@ -144,7 +144,7 @@ async def _get_entry_for_update(
 
 
 async def create_entry(
-    device_id: uuid.UUID,
+    device_id: str,
     *,
     mood: int,
     emotions: list[str],
@@ -258,7 +258,7 @@ async def _fetch_ordered_activities(
 
 
 async def finish_entry(
-    device_id: uuid.UUID, entry_id: uuid.UUID, *, answer: str, source: MessageSource
+    device_id: str, entry_id: uuid.UUID, *, answer: str, source: MessageSource
 ) -> FinishResult:
     """Answer the follow-up, generate analysis (LLM#2), award points, update streak.
 
@@ -369,7 +369,7 @@ def _decode_cursor(cursor: str) -> tuple[datetime, uuid.UUID]:
 
 async def list_finished_entries(
     session: AsyncSession,
-    device_id: uuid.UUID,
+    device_id: str,
     *,
     limit: int,
     cursor: str | None,

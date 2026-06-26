@@ -29,7 +29,7 @@ async def _device_count(device_id: str) -> int:
     sessionmaker = get_sessionmaker()
     async with sessionmaker() as session:
         return await session.scalar(
-            select(func.count()).select_from(Device).where(Device.id == uuid.UUID(device_id))
+            select(func.count()).select_from(Device).where(Device.id == device_id)
         )
 
 
@@ -59,12 +59,12 @@ async def test_missing_key_and_missing_device_id_is_401_no_device() -> None:
     assert r.json()["error"]["code"] == "api_key_required"
 
 
-async def test_invalid_key_with_bad_device_id_is_401_no_device_created() -> None:
-    device_id = str(uuid.uuid4())
-    headers = {"X-API-Key": "nope", "X-Device-Id": "not-a-uuid"}
+async def test_invalid_key_with_device_id_is_401_no_device_created() -> None:
+    device_id = "would-be-device-" + uuid.uuid4().hex
+    headers = {"X-API-Key": "nope", "X-Device-Id": device_id}
     async with _client(headers) as c:
         r = await c.get("/api/v1/me")
-    assert r.status_code == 401  # key checked first, before device validation
+    assert r.status_code == 401  # key checked first, before device handling
     assert r.json()["error"]["code"] == "api_key_invalid"
     # The middleware short-circuits before any Device upsert.
     assert await _device_count(device_id) == 0
@@ -79,7 +79,8 @@ async def test_valid_key_missing_device_id_returns_400() -> None:
 
 
 async def test_valid_key_invalid_device_id_returns_400() -> None:
-    headers = {"X-API-Key": TEST_API_KEY, "X-Device-Id": "not-a-uuid"}
+    # Charset-invalid id (space) -> 400 device_id_invalid (UUID rule is gone).
+    headers = {"X-API-Key": TEST_API_KEY, "X-Device-Id": "bad id!"}
     async with _client(headers) as c:
         r = await c.get("/api/v1/me")
     assert r.status_code == 400

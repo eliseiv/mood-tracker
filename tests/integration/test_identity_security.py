@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import uuid
 from typing import Any
 
 import httpx
@@ -33,24 +32,6 @@ async def test_missing_device_id_returns_400() -> None:
         r = await c.get(f"{API}/me")
     assert r.status_code == 400
     assert r.json()["error"]["code"] == "device_id_required"
-
-
-async def test_malformed_device_id_returns_400() -> None:
-    async with _raw_client({"X-Device-Id": "not-a-uuid"}) as c:
-        r = await c.get(f"{API}/me")
-    assert r.status_code == 400
-    assert r.json()["error"]["code"] == "device_id_invalid"
-
-
-async def test_non_v4_device_id_returns_400() -> None:
-    # A valid UUID but version 1, not 4.
-    v1 = "time-based"
-    uuid_v1 = str(uuid.uuid1())
-    assert uuid.UUID(uuid_v1).version == 1, v1
-    async with _raw_client({"X-Device-Id": uuid_v1}) as c:
-        r = await c.get(f"{API}/me")
-    assert r.status_code == 400
-    assert r.json()["error"]["code"] == "device_id_invalid"
 
 
 async def test_health_without_any_headers_returns_200() -> None:

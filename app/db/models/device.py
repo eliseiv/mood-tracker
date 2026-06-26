@@ -2,21 +2,24 @@
 
 from __future__ import annotations
 
-import uuid
 from datetime import date, datetime
 
-from sqlalchemy import Date, DateTime, Integer, String, Uuid
+from sqlalchemy import Date, DateTime, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base, utcnow
 
 
 class Device(Base):
-    """Anonymous device identified by the ``X-Device-Id`` header."""
+    """Anonymous device identified by the ``X-Device-Id`` header.
+
+    ``id`` is an opaque client-supplied string (ADR-007); a UUID is a valid
+    special case. Stored verbatim (no normalization/mapping).
+    """
 
     __tablename__ = "devices"
 
-    id: Mapped[uuid.UUID] = mapped_column(Uuid(), primary_key=True)
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
     # DB column ``locale``; exposed as ``language`` in the API (BCP-47).
     locale: Mapped[str | None] = mapped_column(String(35), nullable=True)
     timezone: Mapped[str | None] = mapped_column(String(64), nullable=True)

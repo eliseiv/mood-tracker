@@ -25,7 +25,7 @@ erDiagram
 Анонимное устройство = пользователь.
 | Поле | Тип | Примечание |
 |---|---|---|
-| id | UUID (PK) | = `device-id` (UUID v4, приходит в заголовке) |
+| id | `String(64)` (PK) | = `device-id`, **опаковая строка** из заголовка `X-Device-Id` (не только UUID; ADR-007). Хранится как есть (после trim), echo в `GET /me`. Валидация: непустая, ≤64, `^[A-Za-z0-9._-]+$` |
 | locale | text null | последний известный язык/локаль (BCP-47). В API отдаётся как поле `language` (`GET /me`): имя БД-поля — `locale`, клиентское имя — `language` |
 | timezone | text null | IANA tz (для streak по локальной дате, Q-GAME-2). Upsert'ится из поля `timezone` в `POST /entries` (last-write-wins). `null`/невалидная → streak по UTC |
 | points_balance | int, default 0 | денормализованная сумма `PointsLedger.delta` |
@@ -61,7 +61,7 @@ erDiagram
 | id | UUID (PK) | |
 | label | text | |
 | code | text null | для built-in (глобальных) |
-| device_id | UUID FK → Device, null | NULL = глобальная built-in; иначе кастомная |
+| device_id | `String(64)` FK → Device.id, null | NULL = глобальная built-in; иначе кастомная. Тип соответствует `Device.id` (ADR-007) |
 | is_custom | bool | |
 | created_at | timestamptz | |
 
@@ -71,7 +71,7 @@ erDiagram
 | Поле | Тип | Примечание |
 |---|---|---|
 | id | UUID (PK) | |
-| device_id | UUID FK → Device | скоуп |
+| device_id | `String(64)` FK → Device.id | скоуп; тип соответствует `Device.id` (ADR-007) |
 | status | enum | см. [04-api-contract.md](04-api-contract.md) state machine |
 | mood_scale_level_id | UUID FK, NOT NULL | задаётся при создании (`mood` обязателен в `POST /entries`) |
 | language | text null | BCP-47, для LLM (ADR-006) |
@@ -123,13 +123,32 @@ m2m: `(entry_id, emotion_id)` / `(entry_id, activity_id)`.
 | Поле | Тип | Примечание |
 |---|---|---|
 | id | UUID (PK) | |
-| device_id | UUID FK → Device | |
+| device_id | `String(64)` FK → Device.id | тип соответствует `Device.id` (ADR-007) |
 | delta | int | напр. +20 |
 | reason | enum | `entry_finished` (расширяемо) |
 | entry_id | UUID FK null → MoodEntry | |
 | created_at | timestamptz | |
 
 `Device.points_balance` обновляется в той же транзакции, что и вставка в ledger. Начисление за entry идемпотентно: ledger-запись с `(entry_id, reason)` создаётся один раз (см. Q-GAME-1, константа `POINTS_PER_ENTRY=20`).
+
+## Миграция device-id: UUID → String(64) (ADR-007, iteration 8)
+
+`Device.id` и все ссылающиеся FK-колонки переводятся с `UUID` на `String(64)`/`VARCHAR(64)`. Затронутые колонки: **`devices.id`** (PK), **`mood_entries.device_id`**, **`activities.device_id`** (nullable), **`points_ledger.device_id`**. Иных ссылок на `Device` нет (`entry_emotions`/`entry_activities`/`AnalysisResult`/`AdviceSection`/`EntryMessage` ссылаются на `entry_id`, не на device).
+
+**План для PostgreSQL** (порядок важен — нельзя менять тип колонки под действующим FK):
+1. Снять FK-constraints `mood_entries.device_id → devices.id`, `activities.device_id → devices.id`, `points_ledger.device_id → devices.id`.
+2. `ALTER TABLE devices ALTER COLUMN id TYPE varchar(64) USING id::text;`
+3. Для каждой FK-колонки: `ALTER TABLE <t> ALTER COLUMN device_id TYPE varchar(64) USING device_id::text;`
+4. Вернуть FK-constraints с прежним `ON DELETE CASCADE`.
+5. Сохранить/пересоздать индексы и уникальности: PK `devices.id`; индексы `mood_entries(device_id, status)`, `mood_entries(device_id, finished_at DESC)`; уникальность `activities(device_id, lower(label))` и частичный уникальный для глобальных (`device_id IS NULL`). Функциональные/частичные индексы по `device_id` проверить и при необходимости пересоздать после смены типа.
+
+**Сохранность данных:** существующие prod-значения — UUID-строки; `uuid::text` сохраняет их как есть (`'f47ac10b-...'`). Данные не теряются.
+
+**SQLite (local/CI):** через `op.batch_alter_table` (пересоздание таблиц). SQLite хранит идентификаторы как `TEXT` независимо от объявленного типа — фактически no-op по данным, но batch-операции нужны для согласованности схемы/FK.
+
+**Downgrade (varchar→uuid `USING id::uuid`):** обратим **только если все значения — валидные UUID**. После появления хотя бы одного строкового id (напр. `testuser`) downgrade **становится невозможен** — осознанное одностороннее последствие (ADR-007). Зафиксировать в migration docstring; см. также оговорку про необратимые миграции в [07-deployment.md §Rollback](07-deployment.md).
+
+> Деплой: миграция применится автоматически на следующем CI-деплое (`alembic upgrade head` в entrypoint, [07-deployment.md](07-deployment.md)). Существующие тестовые device-строки (UUID) сохраняются.
 
 ## Заметки о консистентности
 

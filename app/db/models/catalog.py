@@ -47,8 +47,8 @@ class Activity(Base):
     label: Mapped[str] = mapped_column(String(100), nullable=False)
     code: Mapped[str | None] = mapped_column(String(50), nullable=True)
     # NULL device_id == global predefined activity; otherwise custom.
-    device_id: Mapped[uuid.UUID | None] = mapped_column(
-        Uuid(), ForeignKey("devices.id", ondelete="CASCADE"), nullable=True
+    device_id: Mapped[str | None] = mapped_column(
+        String(64), ForeignKey("devices.id", ondelete="CASCADE"), nullable=True
     )
     is_custom: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     created_at: Mapped[datetime] = mapped_column(

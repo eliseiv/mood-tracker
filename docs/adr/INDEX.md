@@ -10,6 +10,6 @@
 | [ADR-004](ADR-004-stateless-transcription.md) | Транскрипция — отдельный stateless endpoint | accepted |
 | [ADR-005](ADR-005-structured-llm-output.md) | Structured Outputs для анализа LLM | accepted |
 | [ADR-006](ADR-006-language-handling.md) | Язык ответа задаётся клиентом | accepted |
-| [ADR-007](ADR-007-device-id-identity.md) | Анонимная идентификация по device-id | accepted |
+| [ADR-007](ADR-007-device-id-identity.md) | Анонимная идентификация по device-id (опаковая строка, не только UUID) | accepted |
 | [ADR-008](ADR-008-llm-connection-management.md) | Трёхфазное управление DB-соединением при синхронных LLM-вызовах | accepted |
 | [ADR-009](ADR-009-app-level-api-key.md) | App-level аутентификация по статическому API-ключу (`X-API-Key`) | accepted |

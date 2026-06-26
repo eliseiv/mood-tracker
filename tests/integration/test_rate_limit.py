@@ -73,3 +73,18 @@ async def test_default_get_not_ip_limited(clients: Any, small_limits: None) -> N
         r = await c.get(f"{API}/activities")
         statuses.append(r.status_code)
     assert all(s == 200 for s in statuses), statuses
+
+
+async def test_string_device_id_is_rate_limited(
+    clients: Any, llm: Any, small_limits: None
+) -> None:
+    """The device-key works for a readable string id: 'testuser' trips its own limit."""
+    llm.set_followup("ok?")
+    statuses = []
+    for _ in range(_LIMIT + 1):
+        c = clients(device_id="testuser")  # same string device id, same IP
+        r = await c.post(f"{API}/entries", json=entry_body())
+        statuses.append(r.status_code)
+    # The device key 'llm:device:testuser' trips after _LIMIT requests.
+    assert statuses[:_LIMIT] == [201] * _LIMIT
+    assert statuses[_LIMIT] == 429

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import uuid
 from types import SimpleNamespace
 from typing import Any
 
@@ -33,7 +32,7 @@ async def _entry_count(device_id: str) -> int:
         return await session.scalar(
             select(func.count())
             .select_from(MoodEntry)
-            .where(MoodEntry.device_id == uuid.UUID(device_id))
+            .where(MoodEntry.device_id == device_id)
         )
 
 

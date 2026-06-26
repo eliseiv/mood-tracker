@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import uuid
-
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -20,7 +18,7 @@ router = APIRouter(tags=["catalog"])
     dependencies=[Depends(rate_limit("default"))],
 )
 async def get_activities(
-    device_id: uuid.UUID = Depends(get_device_id),
+    device_id: str = Depends(get_device_id),
     session: AsyncSession = Depends(get_db),
 ) -> ActivitiesResponse:
     """Return predefined plus this device's custom activities."""
@@ -41,7 +39,7 @@ async def get_activities(
 )
 async def create_activity(
     body: CreateActivityRequest,
-    device_id: uuid.UUID = Depends(get_device_id),
+    device_id: str = Depends(get_device_id),
     session: AsyncSession = Depends(get_db),
 ) -> ActivityOut:
     """Create a custom activity (deduplicated by lower(label) within device)."""

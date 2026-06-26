@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import uuid
 from datetime import date, datetime
 
 from pydantic import BaseModel
@@ -11,7 +10,7 @@ from pydantic import BaseModel
 class MeResponse(BaseModel):
     """Device profile (GET /me)."""
 
-    device_id: uuid.UUID
+    device_id: str
     points_balance: int
     current_streak: int
     longest_streak: int

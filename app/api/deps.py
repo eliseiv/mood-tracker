@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import uuid
 from collections.abc import Awaitable, Callable
 
 from fastapi import Depends, Request
@@ -17,9 +16,9 @@ from app.db.session import get_db
 __all__ = ["get_current_device", "get_db", "get_device_id", "rate_limit"]
 
 
-def get_device_id(request: Request) -> uuid.UUID:
-    """Return the device id placed on request state by the middleware."""
-    device_id: uuid.UUID = request.state.device_id
+def get_device_id(request: Request) -> str:
+    """Return the opaque device id placed on request state by the middleware."""
+    device_id: str = request.state.device_id
     return device_id
 
 

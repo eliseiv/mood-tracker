@@ -27,7 +27,7 @@ async def list_levels_with_emotions(
     return [(level, by_level.get(level.id, [])) for level in levels]
 
 
-async def list_activities(session: AsyncSession, device_id: uuid.UUID) -> list[Activity]:
+async def list_activities(session: AsyncSession, device_id: str) -> list[Activity]:
     """Return predefined (global) plus this device's custom activities."""
     stmt = (
         select(Activity)
@@ -37,9 +37,7 @@ async def list_activities(session: AsyncSession, device_id: uuid.UUID) -> list[A
     return list((await session.scalars(stmt)).all())
 
 
-async def create_custom_activity(
-    session: AsyncSession, device_id: uuid.UUID, label: str
-) -> Activity:
+async def create_custom_activity(session: AsyncSession, device_id: str, label: str) -> Activity:
     """Create a custom activity, deduplicated by lower(label) within the device."""
     normalized = label.strip()
     if not normalized:
@@ -93,7 +91,7 @@ async def resolve_emotions(
 
 
 async def resolve_activities(
-    session: AsyncSession, device_id: uuid.UUID, activity_ids: list[str]
+    session: AsyncSession, device_id: str, activity_ids: list[str]
 ) -> list[Activity]:
     """Resolve activity ids scoped to global + this device; unknown -> 422."""
     if not activity_ids:

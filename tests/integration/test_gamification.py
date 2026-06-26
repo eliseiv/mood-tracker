@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import uuid
 from datetime import UTC, datetime
 from typing import Any
 
@@ -22,7 +21,7 @@ async def _ledger_sum(device_id: str) -> int:
     async with sessionmaker() as session:
         return await session.scalar(
             select(func.coalesce(func.sum(PointsLedger.delta), 0)).where(
-                PointsLedger.device_id == uuid.UUID(device_id)
+                PointsLedger.device_id == device_id
             )
         )
 

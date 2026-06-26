@@ -64,8 +64,8 @@ class MoodEntry(Base):
     __tablename__ = "mood_entries"
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid(), primary_key=True, default=uuid.uuid4)
-    device_id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(), ForeignKey("devices.id", ondelete="CASCADE"), nullable=False
+    device_id: Mapped[str] = mapped_column(
+        String(64), ForeignKey("devices.id", ondelete="CASCADE"), nullable=False
     )
     status: Mapped[EntryStatus] = mapped_column(
         SAEnum(EntryStatus, native_enum=False, length=32, validate_strings=True),

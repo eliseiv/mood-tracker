@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Integer, Uuid
+from sqlalchemy import DateTime, ForeignKey, Integer, String, Uuid
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -19,8 +19,8 @@ class PointsLedger(Base):
     __tablename__ = "points_ledger"
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid(), primary_key=True, default=uuid.uuid4)
-    device_id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(), ForeignKey("devices.id", ondelete="CASCADE"), nullable=False
+    device_id: Mapped[str] = mapped_column(
+        String(64), ForeignKey("devices.id", ondelete="CASCADE"), nullable=False
     )
     delta: Mapped[int] = mapped_column(Integer, nullable=False)
     reason: Mapped[PointsReason] = mapped_column(

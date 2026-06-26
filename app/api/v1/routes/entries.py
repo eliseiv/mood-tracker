@@ -37,7 +37,7 @@ router = APIRouter(tags=["entries"])
 async def create_entry(
     body: CreateEntryRequest,
     request: Request,
-    device_id: uuid.UUID = Depends(get_device_id),
+    device_id: str = Depends(get_device_id),
 ) -> CreateEntryResponse:
     """Create an entry and generate the follow-up question (LLM#1).
 
@@ -72,7 +72,7 @@ async def list_entries(
     status: str = "finished",
     limit: int = 20,
     cursor: str | None = None,
-    device_id: uuid.UUID = Depends(get_device_id),
+    device_id: str = Depends(get_device_id),
     session: AsyncSession = Depends(get_db),
 ) -> HistoryResponse:
     """List finished entries with cursor pagination (finished_at DESC)."""
@@ -107,7 +107,7 @@ async def list_entries(
 )
 async def get_entry(
     entry_id: uuid.UUID,
-    device_id: uuid.UUID = Depends(get_device_id),
+    device_id: str = Depends(get_device_id),
     session: AsyncSession = Depends(get_db),
 ) -> EntryResponse:
     """Return the full state of an entry."""
@@ -123,7 +123,7 @@ async def get_entry(
 async def post_finish(
     entry_id: uuid.UUID,
     body: FinishRequest,
-    device_id: uuid.UUID = Depends(get_device_id),
+    device_id: str = Depends(get_device_id),
 ) -> FinishResponse:
     """Answer the follow-up, generate analysis (LLM#2), award points, update streak.
 
@@ -151,7 +151,7 @@ async def post_finish(
 )
 async def get_analysis(
     entry_id: uuid.UUID,
-    device_id: uuid.UUID = Depends(get_device_id),
+    device_id: str = Depends(get_device_id),
     session: AsyncSession = Depends(get_db),
 ) -> AnalysisOut:
     """Return the analysis of a finished entry."""

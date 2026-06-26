@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
+import re
 import secrets
-import uuid
 from collections.abc import Awaitable, Callable
 
 from sqlalchemy.exc import IntegrityError
@@ -22,6 +22,11 @@ logger = get_logger(__name__)
 _HEALTH_PATH = "/health"
 _API_PREFIX = "/api/"
 
+# Opaque device id rules (ADR-007): trimmed, non-empty, <=64 chars,
+# charset [A-Za-z0-9._-] (UUID is a valid special case). Case-sensitive.
+_MAX_DEVICE_ID_LEN = 64
+_DEVICE_ID_RE = re.compile(r"^[A-Za-z0-9._-]+$")
+
 Handler = Callable[[Request], Awaitable[Response]]
 
 
@@ -32,7 +37,7 @@ def _error_response(status_code: int, code: str, message: str) -> JSONResponse:
     )
 
 
-async def _upsert_device(device_id: uuid.UUID) -> None:
+async def _upsert_device(device_id: str) -> None:
     sessionmaker = get_sessionmaker()
     async with sessionmaker() as session:
         device = await session.get(Device, device_id)
@@ -76,15 +81,13 @@ class DeviceIdMiddleware(BaseHTTPMiddleware):
                 return _error_response(401, "api_key_invalid", "Application API key is invalid.")
 
         # 2) Device identity (ADR-007) — only reached with a valid API key.
-        raw = request.headers.get("X-Device-Id")
-        if not raw:
+        # Opaque string id: trim, non-empty, <=64 chars, charset [A-Za-z0-9._-].
+        # Stored/echoed verbatim (no normalization); a UUID is a valid special case.
+        device_id = (request.headers.get("X-Device-Id") or "").strip()
+        if not device_id:
             return _error_response(400, "device_id_required", "X-Device-Id header is required.")
-        try:
-            device_id = uuid.UUID(raw)
-        except (ValueError, AttributeError):
-            return _error_response(400, "device_id_invalid", "X-Device-Id must be a UUID v4.")
-        if device_id.version != 4:
-            return _error_response(400, "device_id_invalid", "X-Device-Id must be a UUID v4.")
+        if len(device_id) > _MAX_DEVICE_ID_LEN or not _DEVICE_ID_RE.match(device_id):
+            return _error_response(400, "device_id_invalid", "X-Device-Id is invalid.")
 
         await _upsert_device(device_id)
         request.state.device_id = device_id
