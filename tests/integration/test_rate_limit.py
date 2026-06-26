@@ -75,9 +75,7 @@ async def test_default_get_not_ip_limited(clients: Any, small_limits: None) -> N
     assert all(s == 200 for s in statuses), statuses
 
 
-async def test_string_device_id_is_rate_limited(
-    clients: Any, llm: Any, small_limits: None
-) -> None:
+async def test_string_device_id_is_rate_limited(clients: Any, llm: Any, small_limits: None) -> None:
     """The device-key works for a readable string id: 'testuser' trips its own limit."""
     llm.set_followup("ok?")
     statuses = []

@@ -30,9 +30,7 @@ async def _entry_count(device_id: str) -> int:
     sessionmaker = get_sessionmaker()
     async with sessionmaker() as session:
         return await session.scalar(
-            select(func.count())
-            .select_from(MoodEntry)
-            .where(MoodEntry.device_id == device_id)
+            select(func.count()).select_from(MoodEntry).where(MoodEntry.device_id == device_id)
         )
 
 
