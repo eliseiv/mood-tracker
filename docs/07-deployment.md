@@ -5,7 +5,10 @@
 | Окружение | `APP_ENV` | БД | Rate limit | App-key (`API_KEY`) | Назначение |
 |---|---|---|---|---|---|
 | local | `local` (default) | SQLite (aiosqlite) | in-memory | опционален (пусто → барьер выключен) | разработка/тесты |
-| prod | `prod` | PostgreSQL 16 | Redis | **обязателен** (непустой; иначе отказ старта) | боевое |
+| prod (single-instance) | `prod` | PostgreSQL 16 | in-memory (`memory`) — допустимо при 1 реплике | **обязателен** (непустой; иначе отказ старта) | боевое (текущий деплой) |
+| prod (multi-replica) | `prod` | PostgreSQL 16 | **Redis** (`redis` + `REDIS_URL`) — обязателен при >1 реплике | **обязателен** | боевое при горизонтальном масштабировании |
+
+> **Текущий деплой — single-instance** (одна реплика api за Traefik): `RATE_LIMIT_BACKEND=memory` — осознанный выбор, см. «Rate limiting backend» ниже.
 
 ## Артефакт
 
@@ -13,6 +16,25 @@
 - `tzdata` входит в основные зависимости — IANA tz-база нужна для `zoneinfo` (streak) в slim-образе.
 - Запуск: `uvicorn app.main:app --host 0.0.0.0 --port 8000` (uvloop в prod).
 - Non-root пользователь в контейнере.
+
+## Текущий prod-деплой (факт)
+
+Сервис развёрнут на общем сервере (devops):
+
+| Параметр | Значение |
+|---|---|
+| Домен | `moodaitracker.shop` |
+| Reverse-proxy / TLS | Traefik (TLS-терминация, маршрутизация) |
+| Топология api | **single-instance** (одна реплика контейнера) |
+| БД | PostgreSQL (один инстанс) |
+| Redis | **не разворачивается** (исключён из ТЗ деплоя; не нужен при 1 реплике) |
+| `APP_ENV` | `prod` |
+| `API_KEY` | задан непустым (prod-guard проходит) |
+| `RATE_LIMIT_BACKEND` | `memory` (in-memory; корректно при 1 реплике — см. «Rate limiting backend») |
+| `TRUST_PROXY_HEADERS` | `true` (за Traefik; прокси перезаписывает `X-Forwarded-For`) |
+| `OPENAI_TEXT_MODEL` | `gpt-4o` |
+
+> При переходе на >1 реплику api необходимо добавить Redis и переключить `RATE_LIMIT_BACKEND=redis` ([Q-RATE-1](99-open-questions.md#q-rate-1)).
 
 ## Конфигурация
 
@@ -26,6 +48,12 @@
 - Проверка `X-API-Key` enforced **тогда и только тогда, когда `API_KEY` непустой**. Пустой `API_KEY` выключает барьер — допустимо **только** при `APP_ENV=local` (разработка/тесты).
 - **prod обязан задать непустой `API_KEY`.** При `APP_ENV=prod` и пустом `API_KEY` приложение **отказывается стартовать** (явная ошибка конфигурации) — это намеренный fail-closed против тихого открытого доступа. Деплой должен задавать `APP_ENV=prod`.
 - Deployment checklist ниже — defense-in-depth поверх guard, не вместо него.
+
+### Rate limiting backend: memory vs redis
+
+- **`RATE_LIMIT_BACKEND=memory` (in-memory) допустим и осознанно выбран для текущего single-instance деплоя.** Счётчики лимитера (по `device-id` и IP) живут в процессе одной реплики api; при **одной** реплике этого достаточно и корректно. Нет внешней зависимости Redis для MVP.
+- **`RATE_LIMIT_BACKEND=redis` (+ `REDIS_URL`) становится ОБЯЗАТЕЛЕН при масштабировании api на >1 реплику.** С несколькими репликами in-memory счётчики не разделяются между процессами → лимиты можно обойти распределением запросов по репликам; общий стор (Redis) делает лимиты глобальными.
+- Переход на Redis при росте нагрузки/горизонтальном масштабировании — [Q-RATE-1](99-open-questions.md#q-rate-1). Это **условие масштабирования**, а не дефект текущего деплоя.
 
 ### CORS — формат `CORS_ALLOW_ORIGINS`
 
@@ -64,8 +92,8 @@
 - [ ] `APP_ENV=prod` задан.
 - [ ] `API_KEY` задан непустым (через secret manager) и совпадает с ключом iOS-сборки. *(Если пуст — приложение не стартует: prod-guard ADR-009.)*
 - [ ] `OPENAI_API_KEY`, `DATABASE_URL` заданы (secret manager).
-- [ ] `RATE_LIMIT_BACKEND=redis` + `REDIS_URL` заданы.
-- [ ] `TRUST_PROXY_HEADERS=true` если за LB (LB перезаписывает `X-Forwarded-For`).
+- [ ] **Rate limit backend по числу реплик:** single-instance (1 реплика) → `RATE_LIMIT_BACKEND=memory` допустим; **multi-replica (>1 реплики) → `RATE_LIMIT_BACKEND=redis` + `REDIS_URL` обязательны** (см. «Rate limiting backend», [Q-RATE-1](99-open-questions.md#q-rate-1)).
+- [ ] `TRUST_PROXY_HEADERS=true` если за reverse-proxy/LB (Traefik) — прокси перезаписывает `X-Forwarded-For`.
 - [ ] `CORS_ALLOW_ORIGINS` — явный список или пусто (`[]`); не `*`.
 - [ ] `OPENAI_TEXT_MODEL=gpt-4o`.
 
@@ -84,8 +112,26 @@
 
 ## Rollback
 
-- Деплой версионируется по образу; rollback = откат на предыдущий тег образа.
-- Миграции пишутся обратимо где возможно; деструктивные изменения — в отдельных шагах.
+- **Версионирование образа по commit SHA.** CI собирает и тегирует образ `moodtracker-api:${IMAGE_TAG}`, где `IMAGE_TAG=<git-sha>` (`docker-compose.yml`, `.github/workflows/deploy.yml`). Предыдущие SHA-образы остаются на сервере → rollback = передеплой предыдущего тега без пересборки.
+- **Что сохраняется при rollback:** `.env` (секреты, не в git) и том `pgdata` (БД) переживают передеплой — пересоздаётся только контейнер `api`.
+
+### Процедура отката (на сервере, в `/opt/moodtracker`)
+
+Откат на предыдущий релиз (без пересборки, если образ ещё на сервере):
+
+```bash
+cd /opt/moodtracker
+docker image ls moodtracker-api            # найти предыдущий <prev_sha> тег
+git checkout --force <prev_sha>            # код под этот образ (compose/labels)
+IMAGE_TAG=<prev_sha> docker compose up -d  # поднять прежний образ; .env/pgdata целы
+docker compose ps && curl --fail -sS https://moodaitracker.shop/health
+```
+
+Если образа предыдущего тега на сервере нет (запрунен) — пересобрать из кода:
+`git checkout --force <prev_sha> && IMAGE_TAG=<prev_sha> docker compose up -d --build`.
+
+- **Миграции** пишутся обратимо где возможно; деструктивные изменения — в отдельных шагах. Откат кода **не** откатывает применённые миграции автоматически: при несовместимой схеме сначала `alembic downgrade <rev>` (вручную), затем передеплой прежнего образа.
+- **Smoke после отката** обязателен: `GET /health` → 200 (как в CI-job `smoke`).
 
 ## Observability
 

@@ -3,7 +3,9 @@
 services:
   api:
     build: .
-    image: moodtracker-api:local
+    # SHA-tagged in CI (IMAGE_TAG=<git-sha>) so rollback = redeploy a prior tag;
+    # defaults to :local for manual/dev builds. See docs/07-deployment.md §Rollback.
+    image: moodtracker-api:${IMAGE_TAG:-local}
     restart: unless-stopped
     env_file: .env
     expose:
@@ -25,6 +27,7 @@ services:
       - "traefik.http.routers.moodtracker.rule=Host(`moodaitracker.shop`)"
       - "traefik.http.routers.moodtracker.entrypoints=websecure"
       - "traefik.http.routers.moodtracker.tls.certresolver=le"
+      - "traefik.http.routers.moodtracker.service=moodtracker"
       - "traefik.http.services.moodtracker.loadbalancer.server.port=8000"
 
   postgres:

@@ -1,30 +1,114 @@
-name: deploy
+name: ci-cd
 
-# Deploy on push to main: SSH to the server and rebuild the moodtracker stack.
-# Traefik (/opt/edge) is never touched — routing comes from container labels.
+# Quality gate (lint + type-check + test) runs on PRs and on push to main.
+# Deploy + post-deploy smoke run ONLY on push to main, and ONLY if the gate is
+# green (needs:). Traefik (/opt/edge) is never touched — routing is via labels.
 on:
   push:
+    branches: [main]
+  pull_request:
     branches: [main]
   workflow_dispatch: {}
 
 concurrency:
-  group: deploy-prod
-  cancel-in-progress: false
+  group: ci-cd-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  UV_VERSION: "0.11.6"   # matches uv.lock revision 3 (see Dockerfile)
 
 jobs:
-  deploy:
+  # ---------------------------------------------------------------- gate: lint
+  lint:
     runs-on: ubuntu-latest
     steps:
-      - name: Deploy over SSH
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+      - run: uv python install 3.12
+      - run: uv sync --frozen
+      - name: ruff check
+        run: uv run ruff check .
+      - name: ruff format --check
+        run: uv run ruff format --check .
+
+  # ----------------------------------------------------------- gate: type-check
+  typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+      - run: uv python install 3.12
+      - run: uv sync --frozen
+      - name: mypy
+        run: uv run mypy app
+
+  # ----------------------------------------------------------------- gate: test
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+      - run: uv python install 3.12
+      # prod extra so asyncpg/redis import paths are covered like prod.
+      - run: uv sync --frozen --extra prod
+      - name: pytest (coverage gate >=80%)
+        run: uv run pytest --cov=app --cov-fail-under=80
+
+  # --------------------------------------------------------- deploy (main only)
+  deploy:
+    needs: [lint, typecheck, test]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    concurrency:
+      group: deploy-prod
+      cancel-in-progress: false
+    steps:
+      - name: Deploy over SSH (SHA-tagged image)
         env:
           SSH_HOST: ${{ secrets.SSH_HOST }}
           SSH_USER: ${{ secrets.SSH_USER }}
           SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          GIT_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
           mkdir -p ~/.ssh
           printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
           ssh-keyscan -H "$SSH_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          # Checkout the exact pushed SHA and build/tag the image with it, so the
+          # previous image (prior SHA tag) stays available for rollback. .env and
+          # the pgdata volume are preserved across redeploys.
           ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes "$SSH_USER@$SSH_HOST" \
-            'set -euo pipefail; cd /opt/moodtracker && git pull --ff-only && docker compose up -d --build && docker compose ps'
+            "set -euo pipefail; cd /opt/moodtracker \
+             && git fetch --all --tags --prune \
+             && git checkout --force '$GIT_SHA' \
+             && IMAGE_TAG='$GIT_SHA' docker compose up -d --build \
+             && docker compose ps"
+
+  # ------------------------------------------------- post-deploy smoke (gating)
+  smoke:
+    needs: [deploy]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Smoke GET https://moodaitracker.shop/health (fail job if not 200)
+        run: |
+          set -euo pipefail
+          url="https://moodaitracker.shop/health"
+          for i in $(seq 1 12); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 "$url" || true)
+            echo "smoke attempt $i -> ${code}"
+            if [ "$code" = "200" ]; then echo "smoke OK: prod /health is 200"; exit 0; fi
+            sleep 5
+          done
+          echo "::error::post-deploy smoke FAILED — $url did not return 200" >&2
+          exit 1
