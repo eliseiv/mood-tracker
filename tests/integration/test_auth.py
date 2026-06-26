@@ -110,7 +110,6 @@ async def test_api_key_not_leaked_in_logs(caplog: pytest.LogCaptureFixture) -> N
             await c.get("/api/v1/me")
             await c.get("/api/v1/moods")
     blob = "\n".join(
-        [rec.getMessage() for rec in caplog.records]
-        + [str(rec.__dict__) for rec in caplog.records]
+        [rec.getMessage() for rec in caplog.records] + [str(rec.__dict__) for rec in caplog.records]
     )
     assert TEST_API_KEY not in blob

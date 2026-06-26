@@ -54,9 +54,7 @@ async def test_non_v4_device_id_returns_400() -> None:
 
 
 async def test_health_without_any_headers_returns_200() -> None:
-    bare = httpx.AsyncClient(
-        transport=httpx.ASGITransport(app=app), base_url="http://test"
-    )
+    bare = httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test")
     async with bare as c:
         r = await c.get("/health")
     assert r.status_code == 200

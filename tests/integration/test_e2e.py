@@ -49,9 +49,7 @@ async def test_full_happy_path_journey(client: Any, llm: Any, clock: Clock) -> N
 
     # 4) Transcription (mock Whisper).
     llm.set_transcription(SimpleNamespace(text="I had a rough day at work.", language="english"))
-    tr = await client.post(
-        f"{API}/transcriptions", files={"audio": ("rec.wav", WAV, "audio/wav")}
-    )
+    tr = await client.post(f"{API}/transcriptions", files={"audio": ("rec.wav", WAV, "audio/wav")})
     assert tr.status_code == 200
     transcript = tr.json()["text"]
     assert tr.json()["detected_language"] == "en"

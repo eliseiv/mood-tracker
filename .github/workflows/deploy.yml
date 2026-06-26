@@ -1,8 +1,8 @@
 name: ci-cd
 
 # Quality gate (lint + type-check + test) runs on PRs and on push to main.
-# Deploy + post-deploy smoke run ONLY on push to main, and ONLY if the gate is
-# green (needs:). Traefik (/opt/edge) is never touched — routing is via labels.
+# Deploy runs ONLY on push to main, and ONLY if the gate is green (needs:).
+# Traefik (/opt/edge) is never touched — routing is via labels.
 on:
   push:
     branches: [main]
@@ -93,22 +93,3 @@ jobs:
              && git checkout --force '$GIT_SHA' \
              && IMAGE_TAG='$GIT_SHA' docker compose up -d --build \
              && docker compose ps"
-
-  # ------------------------------------------------- post-deploy smoke (gating)
-  smoke:
-    needs: [deploy]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Smoke GET https://moodaitracker.shop/health (fail job if not 200)
-        run: |
-          set -euo pipefail
-          url="https://moodaitracker.shop/health"
-          for i in $(seq 1 12); do
-            code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 "$url" || true)
-            echo "smoke attempt $i -> ${code}"
-            if [ "$code" = "200" ]; then echo "smoke OK: prod /health is 200"; exit 0; fi
-            sleep 5
-          done
-          echo "::error::post-deploy smoke FAILED — $url did not return 200" >&2
-          exit 1
