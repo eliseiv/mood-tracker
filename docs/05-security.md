@@ -38,8 +38,8 @@
 | `OPENAI_TEMPERATURE` | температура генерации |
 | `OPENAI_TIMEOUT_SECONDS` | таймаут LLM (~30) |
 | `LLM_MAX_RETRIES` | 1 |
-| `RATE_LIMIT_BACKEND` | `redis` (prod) / `memory` (local) |
-| `REDIS_URL` | для rate limit в prod |
+| `RATE_LIMIT_BACKEND` | `memory` (local и single-instance prod) / `redis` (обязателен при >1 реплике, Q-RATE-1) |
+| `REDIS_URL` | для rate limit при `redis` (multi-replica) |
 | `TRUST_PROXY_HEADERS` | доверять `X-Forwarded-For` для источника IP лимитера; default `false`, в prod за LB — `true` |
 | `MAX_AUDIO_BYTES` | 10485760 (10 MB) |
 | `MAX_TEXT_CHARS` | ~4000 |
@@ -51,7 +51,7 @@
 - Ключи лимитера: по `device-id` **и** по IP. Для дорогих категорий (`llm` — `POST /entries` и `POST /entries/{id}/finish`, `transcription` — `POST /transcriptions`) применяются оба ключа независимо, чтобы один device-id не обходил лимит сменой id и чтобы один IP не выжигал квоту множеством device-id.
 - Строже на `POST /transcriptions`, `POST /entries` (LLM#1), `POST /entries/{id}/finish` (LLM#2) — дорогие LLM/STT вызовы.
 - Ответ `429` + заголовок `Retry-After` (секунды).
-- Store: Redis в prod, in-memory локально (`RATE_LIMIT_BACKEND`).
+- Store (`RATE_LIMIT_BACKEND`): **in-memory** корректен в пределах **одного процесса/реплики** — допустим для local и для **single-instance prod** (текущий деплой). **Redis** обязателен при **>1 реплике** api (иначе счётчики не разделяются между процессами и лимит обходится распределением запросов). Условие масштабирования — [Q-RATE-1](99-open-questions.md#q-rate-1), детали — [07-deployment.md](07-deployment.md).
 
 ### Источник IP и доверенный прокси
 

@@ -21,14 +21,14 @@
 | IANA tz database | tzdata | ^2024.1 | core |
 | DB driver (local) | aiosqlite | ^0.20 | core |
 | DB driver (prod) | asyncpg | ^0.29 | **extra `prod`** |
-| Rate limit store (prod) | redis (async) | ^5.0 | **extra `prod`** |
+| Rate limit store (scale-out / multi-replica) | redis (async) | ^5.0 | **extra `prod`** |
 
 > id GPT-модели фиксируется в env (`OPENAI_TEXT_MODEL`); prod-дефолт — **`gpt-4o`** (поддерживает Structured Outputs `json_schema` strict, [Q-LLM-1](99-open-questions.md#q-llm-1) resolved). `OPENAI_TRANSCRIBE_MODEL=whisper-1`.
 
 ### Обоснование группировки зависимостей
 
 - **`python-multipart`** и **`tzdata`** — в `core` (основные `dependencies`), т.к. инфраструктурно обязательны: FastAPI требует `python-multipart` для парсинга `multipart/form-data` в `POST /transcriptions`; `tzdata` поставляет IANA-базу для `zoneinfo` (streak по локальной дате, Q-GAME-2) на Windows и slim-образах, где системной tz-базы нет.
-- **`asyncpg`** и **`redis`** вынесены в **optional extra `[prod]`**: prod использует PostgreSQL + Redis, а локальная разработка/CI — SQLite (`aiosqlite`) + in-memory rate limiter (см. [07-deployment.md](07-deployment.md)). Дополнительно `asyncpg` не имеет готового wheel под Windows/py3.12, что ломало бы локальную установку под Windows — extra изолирует prod-драйверы от dev-окружения. Прод/CI ставят их явно: `uv sync --extra prod`.
+- **`asyncpg`** и **`redis`** вынесены в **optional extra `[prod]`**: prod использует PostgreSQL (`asyncpg`); `redis`-драйвер включён в extra для rate limiter при горизонтальном масштабировании (`RATE_LIMIT_BACKEND=redis`, multi-replica). **Текущий single-instance prod использует in-memory rate limiter** — Redis не разворачивается (Q-RATE-1, [07-deployment.md](07-deployment.md)). Локальная разработка/CI — SQLite (`aiosqlite`) + in-memory. Дополнительно `asyncpg` не имеет готового wheel под Windows/py3.12, что ломало бы локальную установку под Windows — extra изолирует prod-драйверы от dev-окружения. Прод/CI ставят их явно: `uv sync --extra prod`.
 
 ## База данных
 

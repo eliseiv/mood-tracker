@@ -34,6 +34,8 @@
 > Iteration 5: добавлена **app-level аутентификация по статическому API-ключу** `X-API-Key` (ADR-009) — обязателен на `/api/v1/*` (кроме `GET /health`), проверяется в middleware **до** `X-Device-Id`, constant-time, `401 api_key_required`/`api_key_invalid`. Env-секрет `API_KEY`.
 >
 > Iteration 6: backend реализовал `X-API-Key` (barrier enforced при непустом `API_KEY`; пустой → выключен для local/test) + исправил парсинг `CORS_ALLOW_ORIGINS` (пусто→`[]` / comma-separated / JSON). Зафиксированы: семантика включения барьера, **prod-guard** (`APP_ENV=prod` + пустой `API_KEY` → отказ старта, fail-closed, ADR-009) и формат CORS. **Требует rework backend**: env `APP_ENV` + стартовый prod-guard.
+>
+> Iteration 7: devops развернул сервис на `moodaitracker.shop` за Traefik (single-instance api + один postgres, без Redis), `APP_ENV=prod`, `TRUST_PROXY_HEADERS=true`, `gpt-4o`. Зафиксировано решение **rate limit backend**: `RATE_LIMIT_BACKEND=memory` допустим при single-instance (корректен в пределах 1 реплики); Redis обязателен только при >1 реплике ([Q-RATE-1](99-open-questions.md#q-rate-1)). docs↔деплой согласованы — rework не требуется.
 
 ## Фазы реализации
 

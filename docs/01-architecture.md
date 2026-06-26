@@ -2,14 +2,14 @@
 
 ## Топология
 
-Монолит (ADR-002): один FastAPI-сервис, обслуживающий REST API `/api/v1` для iOS-клиента. Внешние зависимости — PostgreSQL (prod) и OpenAI API (GPT + Whisper). Redis опционален в prod для rate limiting (in-memory локально).
+Монолит (ADR-002): один FastAPI-сервис, обслуживающий REST API `/api/v1` для iOS-клиента. Внешние зависимости — PostgreSQL (prod) и OpenAI API (GPT + Whisper). Rate limiting: in-memory при single-instance деплое (текущий prod за Traefik), Redis обязателен только при масштабировании на >1 реплику (Q-RATE-1).
 
 ```mermaid
 graph TD
   iOS[iOS App] -->|HTTPS /api/v1, X-API-Key + X-Device-Id| API[FastAPI monolith]
   API --> DB[(PostgreSQL 16)]
   API -->|HTTPS| OAI[OpenAI API: GPT + Whisper]
-  API -.->|rate limit state| Redis[(Redis, prod)]
+  API -.->|rate limit state, multi-replica only| Redis[(Redis, scale-out)]
 ```
 
 ## Компоненты (внутренняя структура)
