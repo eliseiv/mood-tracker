@@ -1,0 +1,35 @@
+# VCS / IDE
+.git
+.gitignore
+.idea
+.vscode
+
+# Secrets — never bake into the image
+.env
+.env.*
+
+# Python caches / virtualenv (deps come from uv sync in the builder)
+.venv
+__pycache__/
+**/__pycache__/
+*.py[cod]
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Tests and local databases
+tests/
+*.db
+*.sqlite3
+
+# Docs / CI (not needed at runtime; --no-install-project skips hatchling readme)
+docs/
+*.md
+.github/
+
+# Build artifacts
+dist/
+build/
+*.egg-info/
