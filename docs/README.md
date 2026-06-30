@@ -36,6 +36,8 @@
 > Iteration 6: backend реализовал `X-API-Key` (barrier enforced при непустом `API_KEY`; пустой → выключен для local/test) + исправил парсинг `CORS_ALLOW_ORIGINS` (пусто→`[]` / comma-separated / JSON). Зафиксированы: семантика включения барьера, **prod-guard** (`APP_ENV=prod` + пустой `API_KEY` → отказ старта, fail-closed, ADR-009) и формат CORS. **Требует rework backend**: env `APP_ENV` + стартовый prod-guard.
 >
 > Iteration 7: devops развернул сервис на `moodaitracker.shop` за Traefik (single-instance api + один postgres, без Redis), `APP_ENV=prod`, `TRUST_PROXY_HEADERS=true`, `gpt-4o`. Зафиксировано решение **rate limit backend**: `RATE_LIMIT_BACKEND=memory` допустим при single-instance (корректен в пределах 1 реплики); Redis обязателен только при >1 реплике ([Q-RATE-1](99-open-questions.md#q-rate-1)). docs↔деплой согласованы — rework не требуется.
+>
+> Iteration 9: **финальный каталог настроений/эмоций + локализация EN/RU** (ADR-010). 5 уровней (коды 3/5 → `neutral`/`awesome`) × 20 = **100 эмоций**, метки EN+RU. Модель локализации — явные колонки `label_en`/`label_ru` на `Emotion` и `MoodScaleLevel` (отвергнут JSONB). `GET /moods` локализуется: `?language=` → `Accept-Language` → `en`; `code` стабилен. Источник истины — `docs/modules/catalog/emotion_catalog.tsv` → seed. **Миграция 0005 non-destructive** (старые эмоции `is_active=false`, не удаляются — FK `entry_emotions` целы; идемпотентна по `code`; кросс-БД PG/SQLite). Q-CATALOG-1 resolved. **Требует rework backend** (catalog): модели, миграция 0005, seed, `GET /moods`.
 
 ## Фазы реализации
 

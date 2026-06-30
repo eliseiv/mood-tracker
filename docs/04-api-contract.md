@@ -114,7 +114,8 @@ https://<host>/api/v1
 | **role сообщения** | `user_description`, `ai_followup`, `user_followup_answer` |
 | **source** | `text`, `voice` |
 | **reason очков** | `entry_finished` |
-| **mood scale value** | `1` (terrible), `2` (bad), `3` (okay), `4` (good), `5` (great) |
+| **mood scale value** | `1` (`terrible`), `2` (`bad`), `3` (`neutral`), `4` (`good`), `5` (`awesome`) — коды уровней 3 и 5 изменены (было `okay`/`great`) |
+| **emotion code** | формат `<level>_<emotion>` (напр. `terrible_devastated`, `awesome_ecstatic`); 100 кодов, см. [modules/catalog](modules/catalog/README.md). Стабилен, не локализуется |
 
 ---
 
@@ -191,32 +192,44 @@ stateDiagram-v2
 ### 6.2 Каталог
 
 #### `GET /moods`
-Список уровней настроения с эмоциями.
+Список уровней настроения (5) с эмоциями (20 на уровень, всего 100). Метки — **локализованные** (ADR-010).
 
-Query: `language` (опц.) — для локализованных меток (если поддержано seed-данными).
+**Локализация (выбор языка меток):**
+- Приоритет: query-параметр **`?language=`** → заголовок **`Accept-Language`** → дефолт **`en`**.
+- Распознаётся primary-subtag: `ru`/`ru-RU` → **RU-метки**; любое другое значение (включая `en`, неизвестные языки, отсутствие) → **EN-метки**.
+- Поле `label` (у уровня и у эмоции) содержит **строку на выбранном языке**. `code` — стабильный машинный ключ, **не локализуется** (его клиент шлёт в `POST /entries`).
 
-Ответ `200`:
+Query:
+| Параметр | Тип | Примечание |
+|---|---|---|
+| `language` | string (BCP-47), опц. | язык меток; `ru*` → RU, иначе EN. Без параметра — fallback на `Accept-Language`, затем `en` |
+
+Ответ `200` (пример с `?language=ru`):
 ```json
 {
   "levels": [
     {
-      "value": 1, "code": "terrible", "label": "Terrible", "order": 1,
+      "value": 1, "code": "terrible", "label": "Ужасно", "order": 1,
       "emotions": [
-        { "code": "anxious", "label": "Anxious", "order": 1 },
-        { "code": "angry", "label": "Angry", "order": 2 }
+        { "code": "terrible_devastated", "label": "Опустошённый", "order": 1 },
+        { "code": "terrible_panicked", "label": "В панике", "order": 2 }
       ]
     },
     {
-      "value": 5, "code": "great", "label": "Great", "order": 5,
+      "value": 5, "code": "awesome", "label": "Отлично", "order": 5,
       "emotions": [
-        { "code": "joyful", "label": "Joyful", "order": 1 },
-        { "code": "grateful", "label": "Grateful", "order": 2 }
+        { "code": "awesome_joyful", "label": "Радостный", "order": 1 },
+        { "code": "awesome_ecstatic", "label": "В эйфории", "order": 20 }
       ]
     }
   ]
 }
 ```
-> built-in seed-каталог эмоций/уровней = baseline-дефолт (Q-CATALOG-1 resolved-by-design); placeholder-набор приемлем, точные значения из Figma могут быть уточнены позже без изменения формата. Значения выше — пример формата.
+Тот же запрос с `?language=en` (или без параметра) вернёт `label` уровня `"Terrible"`/`"Awesome"` и эмоций `"Devastated"`/`"Ecstatic"`.
+
+- Возвращаются только активные эмоции (`is_active=true`) — это новые 100; старые деактивированные коды (`anxious` и т.п.) в ответе **отсутствуют**.
+- Коды уровней: `terrible`(1), `bad`(2), `neutral`(3), `good`(4), `awesome`(5). Коды 3/5 изменены (было `okay`/`great`).
+- Полный перечень 100 эмоций — датасет [modules/catalog/emotion_catalog.tsv](modules/catalog/emotion_catalog.tsv) (источник истины), материализуется в seed. Формат ответа стабилен.
 
 #### `GET /activities`
 built-in (глобальные) + кастомные активности этого устройства.
@@ -292,7 +305,7 @@ Content-Type: audio/m4a
 ```json
 {
   "mood": 2,
-  "emotions": ["anxious", "tired"],
+  "emotions": ["bad_stressed", "bad_worried"],
   "activities": ["9b1f...", "c7e9..."],
   "description": "I had a really rough day at work and felt overwhelmed.",
   "source": "voice",
@@ -338,7 +351,7 @@ Content-Type: audio/m4a
   "id": "8f14e45f-ceea-467a-9575-0e02b2c3d111",
   "status": "awaiting_answer",
   "mood": 2,
-  "emotions": ["anxious", "tired"],
+  "emotions": ["bad_stressed", "bad_worried"],
   "activities": [{ "id": "9b1f...", "label": "Work" }],
   "language": "en-US",
   "messages": [
@@ -429,14 +442,14 @@ Query:
     {
       "id": "8f14e45f-...",
       "mood": 2,
-      "emotions": ["anxious", "tired"],
+      "emotions": ["bad_stressed", "bad_worried"],
       "title": "Work Overwhelm",
       "finished_at": "2026-06-26T10:05:00Z"
     },
     {
       "id": "1a2b3c4d-...",
       "mood": 4,
-      "emotions": ["calm"],
+      "emotions": ["good_relaxed"],
       "title": "Quiet Evening",
       "finished_at": "2026-06-25T21:10:00Z"
     }
@@ -470,7 +483,7 @@ Query:
         multipart: audio=<file>
 4.  POST /api/v1/entries                     → { entry_id, status: "awaiting_answer", question, prompt_version }   (LLM#1)
         body: {
-          "mood": 2, "emotions": ["anxious","tired"], "activities": ["9b1f..."],
+          "mood": 2, "emotions": ["bad_stressed","bad_worried"], "activities": ["9b1f..."],
           "description": "...", "source": "voice", "language": "en-US", "timezone": "Europe/Amsterdam"
         }
 5.  (опц.) POST /api/v1/transcriptions       → { text, detected_language }   (если ответ голосом)

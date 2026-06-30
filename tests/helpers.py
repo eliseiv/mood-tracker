@@ -42,7 +42,8 @@ def entry_body(
 ) -> dict[str, Any]:
     body: dict[str, Any] = {
         "mood": mood,
-        "emotions": emotions if emotions is not None else ["sad", "tired"],
+        # Default emotions belong to level 2 ("bad"); override for other moods.
+        "emotions": emotions if emotions is not None else ["bad_sad", "bad_stressed"],
         "description": description,
     }
     if activities is not None:

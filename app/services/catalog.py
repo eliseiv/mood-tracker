@@ -9,6 +9,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import ActivityDuplicateError, ValidationError
 from app.db.models import Activity, Emotion, MoodScaleLevel
+from app.llm.language import parse_accept_language
+
+
+def resolve_catalog_language(query_language: str | None, accept_language: str | None) -> str:
+    """Resolve catalog label language (ADR-010): ?language= -> Accept-Language -> en.
+
+    Recognizes the primary subtag: ``ru``/``ru-RU`` -> ``ru``; anything else -> ``en``.
+    """
+    raw = query_language or parse_accept_language(accept_language) or "en"
+    primary = raw.split("-")[0].strip().lower()
+    return "ru" if primary == "ru" else "en"
 
 
 async def list_levels_with_emotions(
@@ -72,11 +83,19 @@ async def resolve_level(session: AsyncSession, mood_value: int) -> MoodScaleLeve
 async def resolve_emotions(
     session: AsyncSession, codes: list[str], level: MoodScaleLevel
 ) -> list[Emotion]:
-    """Resolve emotion codes and verify each belongs to the given mood level."""
+    """Resolve emotion codes and verify each belongs to the given mood level.
+
+    Only active emotions are selectable; retired (``is_active=false``) legacy codes
+    resolve as unknown -> 422 (ADR-010 migration deactivates the old catalog).
+    """
     if not codes:
         return []
     unique_codes = list(dict.fromkeys(codes))
-    emotions = (await session.scalars(select(Emotion).where(Emotion.code.in_(unique_codes)))).all()
+    emotions = (
+        await session.scalars(
+            select(Emotion).where(Emotion.code.in_(unique_codes), Emotion.is_active.is_(True))
+        )
+    ).all()
     found = {emotion.code: emotion for emotion in emotions}
     unknown = [code for code in unique_codes if code not in found]
     if unknown:

@@ -73,11 +73,11 @@ def test_migration_0003_upgrade_and_downgrade_reversible(tmp_path: Path) -> None
 # ---------------------------------------------------------------------------
 # 0004 — device-id UUID -> String(64) on SQLite
 # ---------------------------------------------------------------------------
-def test_upgrade_head_reaches_0004_with_string_device_id(tmp_path: Path) -> None:
+def test_upgrade_head_has_string_device_id_and_reaches_0005(tmp_path: Path) -> None:
     db = tmp_path / f"mig_{uuid.uuid4().hex}.db"
     _alembic(db, "upgrade", "head")
-    assert _alembic_version(db) == "0004_device_id_string"
-    decl_type, _ = _column(db, "devices", "id")
+    assert _alembic_version(db) == "0005_catalog_localization"
+    decl_type, _ = _column(db, "devices", "id")  # 0004 type change persists
     assert "VARCHAR(64)" in decl_type.upper() or "CHAR(64)" in decl_type.upper()
 
 
@@ -122,15 +122,123 @@ def test_0004_preserves_existing_rows_and_cascade_sqlite(tmp_path: Path) -> None
 
 def test_downgrade_0004_to_0003_sqlite(tmp_path: Path) -> None:
     db = tmp_path / f"mig_{uuid.uuid4().hex}.db"
-    _alembic(db, "upgrade", "head")
+    _alembic(db, "upgrade", "0004_device_id_string")
     _alembic(db, "downgrade", "0003_two_post_lifecycle")
     assert _alembic_version(db) == "0003_two_post_lifecycle"
-    _alembic(db, "upgrade", "head")
+    _alembic(db, "upgrade", "0004_device_id_string")
     assert _alembic_version(db) == "0004_device_id_string"
 
 
 # ---------------------------------------------------------------------------
-# 0004 — Postgres prod-parity run (skipped unless a Postgres is reachable)
+# 0005 — catalog localization (EN/RU, 100 emotions) on SQLite
+# ---------------------------------------------------------------------------
+def _active_emotion_count(db: Path) -> int:
+    conn = sqlite3.connect(db)
+    try:
+        return conn.execute("SELECT count(*) FROM emotions WHERE is_active=1").fetchone()[0]
+    finally:
+        conn.close()
+
+
+def test_0005_non_destructive_preserves_legacy_link_sqlite(tmp_path: Path) -> None:
+    db = tmp_path / f"mig_{uuid.uuid4().hex}.db"
+    # Build the legacy (0004) catalog and an entry linked to a legacy emotion.
+    _alembic(db, "upgrade", "0004_device_id_string")
+    dev = "legacy-device"
+    entry_id = uuid.uuid4().hex
+    now = datetime.now(UTC).isoformat()
+    conn = sqlite3.connect(db)
+    try:
+        conn.execute("PRAGMA foreign_keys=ON")
+        level1 = conn.execute("SELECT id FROM mood_scale_levels WHERE value=1").fetchone()[0]
+        anxious_id = conn.execute("SELECT id FROM emotions WHERE code='anxious'").fetchone()[0]
+        conn.execute(
+            "INSERT INTO devices (id, points_balance, current_streak, longest_streak,"
+            " created_at, last_seen_at) VALUES (?, 0, 0, 0, ?, ?)",
+            (dev, now, now),
+        )
+        conn.execute(
+            "INSERT INTO mood_entries (id, device_id, status, mood_scale_level_id, created_at)"
+            " VALUES (?, ?, 'awaiting_answer', ?, ?)",
+            (entry_id, dev, level1, now),
+        )
+        conn.execute(
+            "INSERT INTO entry_emotions (entry_id, emotion_id) VALUES (?, ?)",
+            (entry_id, anxious_id),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    _alembic(db, "upgrade", "head")  # 0004 -> 0005
+
+    conn = sqlite3.connect(db)
+    try:
+        # Legacy emotion kept (not deleted), deactivated; link intact.
+        anxious = conn.execute("SELECT is_active FROM emotions WHERE code='anxious'").fetchone()
+        assert anxious is not None and anxious[0] == 0
+        link = conn.execute(
+            "SELECT count(*) FROM entry_emotions ee JOIN emotions e ON e.id=ee.emotion_id"
+            " WHERE e.code='anxious' AND ee.entry_id=?",
+            (entry_id,),
+        ).fetchone()[0]
+        assert link == 1
+        # New localized catalog present.
+        assert _active_emotion_count(db) == 100
+        assert (
+            conn.execute("SELECT code FROM mood_scale_levels WHERE value=3").fetchone()[0]
+            == "neutral"
+        )
+        assert (
+            conn.execute("SELECT code FROM mood_scale_levels WHERE value=5").fetchone()[0]
+            == "awesome"
+        )
+        # label_en / label_ru NOT NULL for all rows.
+        assert (
+            conn.execute("SELECT count(*) FROM emotions WHERE label_ru IS NULL").fetchone()[0] == 0
+        )
+        assert (
+            conn.execute("SELECT count(*) FROM emotions WHERE label_en IS NULL").fetchone()[0] == 0
+        )
+        assert (
+            conn.execute(
+                "SELECT count(*) FROM mood_scale_levels WHERE label_ru IS NULL"
+            ).fetchone()[0]
+            == 0
+        )
+    finally:
+        conn.close()
+
+
+def test_0005_downgrade_reactivates_legacy_and_removes_new_sqlite(tmp_path: Path) -> None:
+    db = tmp_path / f"mig_{uuid.uuid4().hex}.db"
+    _alembic(db, "upgrade", "head")
+    assert _active_emotion_count(db) == 100
+    _alembic(db, "downgrade", "0004_device_id_string")
+    assert _alembic_version(db) == "0004_device_id_string"
+    conn = sqlite3.connect(db)
+    try:
+        # New emotions removed, legacy reactivated, level codes reverted.
+        assert (
+            conn.execute(
+                "SELECT count(*) FROM emotions WHERE code='terrible_devastated'"
+            ).fetchone()[0]
+            == 0
+        )
+        assert conn.execute("SELECT count(*) FROM emotions WHERE is_active=1").fetchone()[0] == 25
+        assert (
+            conn.execute("SELECT code FROM mood_scale_levels WHERE value=3").fetchone()[0] == "okay"
+        )
+        assert (
+            conn.execute("SELECT code FROM mood_scale_levels WHERE value=5").fetchone()[0]
+            == "great"
+        )
+    finally:
+        conn.close()
+
+
+# ---------------------------------------------------------------------------
+# Postgres prod-parity runs (skipped unless a Postgres is reachable)
 # ---------------------------------------------------------------------------
 def _pg_dsn() -> str:
     assert _PG_URL is not None
@@ -305,6 +413,105 @@ async def test_0004_postgres_downgrade_reversible_only_with_uuid_ids() -> None:
     conn = await asyncpg.connect(dsn)
     try:
         version = await conn.fetchval("SELECT version_num FROM alembic_version")
-        assert version == "0004_device_id_string"  # stayed at head
+        # Alembic runs the whole downgrade in one transaction; the 0004->0003 cast
+        # failure rolls back the entire chain, so the DB stays at head.
+        assert version == "0005_catalog_localization"
+    finally:
+        await conn.close()
+
+
+@pytest.mark.skipif(not _PG_URL, reason="MT_TEST_POSTGRES_URL not set — Postgres run skipped")
+@pytest.mark.asyncio
+async def test_0005_postgres_localization_non_destructive() -> None:
+    import asyncpg
+
+    dsn = _pg_dsn()
+    conn = await asyncpg.connect(dsn)
+    try:
+        await conn.execute("DROP SCHEMA public CASCADE; CREATE SCHEMA public;")
+    finally:
+        await conn.close()
+
+    # Legacy (0004) catalog + an entry linked to a legacy emotion.
+    _alembic_pg("upgrade", "0004_device_id_string")
+    dev = "f47ac10b-58cc-4372-a567-0e02b2c3d479"
+    entry_id = uuid.uuid4()
+    conn = await asyncpg.connect(dsn)
+    try:
+        level1 = await conn.fetchval("SELECT id FROM mood_scale_levels WHERE value=1")
+        anxious_id = await conn.fetchval("SELECT id FROM emotions WHERE code='anxious'")
+        assert await conn.fetchval("SELECT label FROM emotions WHERE code='anxious'") == "Anxious"
+        await conn.execute(
+            "INSERT INTO devices (id, points_balance, current_streak, longest_streak,"
+            " created_at, last_seen_at) VALUES ($1, 0, 0, 0, now(), now())",
+            dev,
+        )
+        await conn.execute(
+            "INSERT INTO mood_entries (id, device_id, status, mood_scale_level_id, created_at)"
+            " VALUES ($1, $2, 'awaiting_answer', $3, now())",
+            entry_id,
+            dev,
+            level1,
+        )
+        await conn.execute(
+            "INSERT INTO entry_emotions (entry_id, emotion_id) VALUES ($1, $2)",
+            entry_id,
+            anxious_id,
+        )
+    finally:
+        await conn.close()
+
+    _alembic_pg("upgrade", "head")  # 0004 -> 0005
+
+    conn = await asyncpg.connect(dsn)
+    try:
+        # rename label -> label_en preserved EN; label_ru backfilled + NOT NULL.
+        assert (
+            await conn.fetchval("SELECT label_en FROM emotions WHERE code='anxious'") == "Anxious"
+        )
+        nullable = {
+            (r["table_name"], r["column_name"]): r["is_nullable"]
+            for r in await conn.fetch(
+                "SELECT table_name, column_name, is_nullable FROM information_schema.columns"
+                " WHERE column_name IN ('label_en','label_ru')"
+                " AND table_name IN ('emotions','mood_scale_levels')"
+            )
+        }
+        assert nullable[("emotions", "label_ru")] == "NO"
+        assert nullable[("mood_scale_levels", "label_ru")] == "NO"
+
+        # Legacy deactivated (not deleted); entry_emotions link intact.
+        assert await conn.fetchval("SELECT is_active FROM emotions WHERE code='anxious'") is False
+        assert (
+            await conn.fetchval(
+                "SELECT count(*) FROM entry_emotions ee JOIN emotions e ON e.id=ee.emotion_id"
+                " WHERE e.code='anxious' AND ee.entry_id=$1",
+                entry_id,
+            )
+            == 1
+        )
+
+        # New localized catalog: 100 active; levels 3/5 = neutral/awesome.
+        assert await conn.fetchval("SELECT count(*) FROM emotions WHERE is_active") == 100
+        assert await conn.fetchval("SELECT code FROM mood_scale_levels WHERE value=3") == "neutral"
+        assert await conn.fetchval("SELECT code FROM mood_scale_levels WHERE value=5") == "awesome"
+        assert (
+            await conn.fetchval("SELECT label_ru FROM emotions WHERE code='terrible_devastated'")
+            == "Опустошённый"
+        )
+
+        # FK emotions -> mood_scale_levels (CASCADE) and its index still present.
+        deltype = await conn.fetchval(
+            "SELECT confdeltype::text FROM pg_constraint"
+            " WHERE contype='f' AND conrelid='emotions'::regclass"
+            " AND confrelid='mood_scale_levels'::regclass"
+        )
+        assert deltype == "c"
+        assert (
+            await conn.fetchval(
+                "SELECT count(*) FROM pg_indexes WHERE indexname='ix_emotions_scale_level_id'"
+            )
+            == 1
+        )
     finally:
         await conn.close()

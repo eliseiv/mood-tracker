@@ -60,7 +60,7 @@ async def test_full_happy_path_journey(client: Any, llm: Any, clock: Clock) -> N
         f"{API}/entries",
         json=entry_body(
             mood=2,
-            emotions=["sad", "tired"],
+            emotions=["bad_sad", "bad_stressed"],
             activities=[activity_id],
             description=transcript,
             source="voice",

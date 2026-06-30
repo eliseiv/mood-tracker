@@ -36,24 +36,29 @@ erDiagram
 | last_seen_at | timestamptz | обновляется middleware при каждом запросе |
 
 ### MoodScaleLevel
-Шкала настроения 1..5.
+Шкала настроения 1..5. Локализация — явные колонки (ADR-010).
 | Поле | Тип | Примечание |
 |---|---|---|
 | id | UUID (PK) | |
-| value | int unique | 1..5 (1=terrible … 5=great) |
-| code | text unique | напр. `terrible`,`bad`,`okay`,`good`,`great` |
-| label | text | человекочитаемая метка |
-| order | int | порядок отображения |
+| value | int unique | 1..5; **= intensity_score** уровня (датасет). Соответствие code: 1=`terrible`, 2=`bad`, 3=`neutral`, 4=`good`, 5=`awesome` |
+| code | text unique | стабильный нелокализуемый ключ: `terrible`,`bad`,`neutral`,`good`,`awesome` (было `okay`/`great` для 3/5 — изменено) |
+| label_en | text NOT NULL | EN-метка: `Terrible`,`Bad`,`Neutral`,`Good`,`Awesome` |
+| label_ru | text NOT NULL | RU-метка: `Ужасно`,`Плохо`,`Нейтрально`,`Хорошо`,`Отлично` (разумный дефолт, корректируемый) |
+| order | int | порядок отображения (= value) |
 
 ### Emotion
+Локализация — явные колонки (ADR-010). Полный набор = **100 эмоций** (5 уровней × 20), источник — датасет [modules/catalog/emotion_catalog.tsv](modules/catalog/emotion_catalog.tsv), материализуется в `app/seed/catalog_seed.py`.
 | Поле | Тип | Примечание |
 |---|---|---|
 | id | UUID (PK) | |
-| code | text unique | стабильный идентификатор |
-| label | text | метка (UI) |
-| scale_level_id | UUID FK → MoodScaleLevel | к какому уровню относится |
-| order | int | |
-| is_active | bool, default true | |
+| code | text unique | стабильный нелокализуемый идентификатор = `suggested_key`, формат `<level>_<emotion>` (напр. `terrible_devastated`) |
+| label_en | text NOT NULL | EN-метка = `emotion_en` |
+| label_ru | text NOT NULL | RU-метка = `emotion_ru` |
+| scale_level_id | UUID FK → MoodScaleLevel | к какому уровню относится (по `value`). Правило «эмоция принадлежит уровню» валидируется по `scale_level_id`, не по префиксу `code` |
+| order | int | порядок в пределах уровня (`order` из датасета, 1..20) |
+| is_active | bool, default true | `GET /moods` отдаёт только `is_active=true`. Старые эмоции (`anxious`, `angry`, …) после миграции `is_active=false` (не удаляются — сохраняют FK `entry_emotions`) |
+
+> Отдельной колонки intensity для эмоции нет: интенсивность эмоции = `value`/`intensity_score` её уровня.
 
 ### Activity
 | Поле | Тип | Примечание |
@@ -149,6 +154,36 @@ m2m: `(entry_id, emotion_id)` / `(entry_id, activity_id)`.
 **Downgrade (varchar→uuid `USING id::uuid`):** обратим **только если все значения — валидные UUID**. После появления хотя бы одного строкового id (напр. `testuser`) downgrade **становится невозможен** — осознанное одностороннее последствие (ADR-007). Зафиксировать в migration docstring; см. также оговорку про необратимые миграции в [07-deployment.md §Rollback](07-deployment.md).
 
 > Деплой: миграция применится автоматически на следующем CI-деплое (`alembic upgrade head` в entrypoint, [07-deployment.md](07-deployment.md)). Существующие тестовые device-строки (UUID) сохраняются.
+
+## Миграция каталога: локализация + полный набор эмоций (ADR-010, миграция 0005)
+
+NON-DESTRUCTIVE: на prod есть тестовые `MoodEntry`, ссылающиеся на старые эмоции через `entry_emotions`. Старые строки эмоций/уровней **не удаляются** — иначе нарушится FK и потеряются данные. Применяется на живом prod-Postgres через `alembic upgrade head` в entrypoint ([07-deployment.md](07-deployment.md)).
+
+**Затронутые таблицы:** `mood_scale_levels`, `emotions`. `entry_emotions` (m2m) — **не трогается** (FK на `emotion_id` сохраняются через деактивацию, а не удаление).
+
+**Порядок (важен — backfill до NOT NULL):**
+
+1. **DDL (схема).** На `mood_scale_levels` и `emotions`:
+   - переименовать `label` → `label_en`;
+   - добавить `label_ru` (сначала NULLABLE — чтобы пройти backfill).
+   - PostgreSQL: `ALTER TABLE … RENAME COLUMN` / `ADD COLUMN`. SQLite: через `op.batch_alter_table` (пересоздание таблицы — SQLite не умеет надёжный RENAME/ALTER COLUMN).
+2. **UPDATE существующих `mood_scale_levels` на месте** (5 строк):
+   - `value=3`: `code` `okay`→`neutral`, `label_en`=`Neutral`; `value=5`: `code` `great`→`awesome`, `label_en`=`Awesome`;
+   - всем 5 проставить `label_ru` (`Ужасно`/`Плохо`/`Нейтрально`/`Хорошо`/`Отлично`); `value` 1/2/4 — `code`/`label_en` без изменений.
+3. **Backfill `label_ru` у существующих эмоций.** Чтобы пройти NOT NULL: всем строкам `emotions` с `label_ru IS NULL` проставить `label_ru = label_en` (старые эмоции всё равно деактивируются; смысловой перевод не нужен).
+4. **Деактивировать все существующие эмоции:** `UPDATE emotions SET is_active = false`. Старые коды (`anxious`, `angry`, …) — бесфиксные, новые — с префиксом уровня (`terrible_devastated`), коллизий по `code` нет.
+5. **Вставить 100 новых эмоций** (датасет): `code=suggested_key`, `label_en=emotion_en`, `label_ru=emotion_ru`, `scale_level_id` по `value` (через `mood_state`), `order`, `is_active=true`. **Идемпотентно по уникальному `code`**: вставлять только отсутствующие коды (`WHERE NOT EXISTS` / pre-select), повторный прогон не дублирует.
+6. **NOT NULL.** После backfill — выставить `label_ru` NOT NULL (PG: `ALTER COLUMN … SET NOT NULL`; SQLite: в `batch_alter_table`).
+
+**Эффект:** `GET /moods` (фильтр `is_active=true`) показывает только новые 100 эмоций и обновлённые коды уровней (`neutral`/`awesome`); старые тестовые `entry_emotions` остаются валидными (строки эмоций живы, деактивированы).
+
+**Кросс-БД:** DDL-шаги — через `batch_alter_table` (даёт корректную работу и на PG, и на SQLite). UPDATE/INSERT — обычный SQL, идентичен на обеих БД. JSON/JSONB не задействованы (метки — обычные text-колонки).
+
+**Сохранность prod-данных:** ни одна строка не удаляется; FK `entry_emotions → emotions.id` целы; данные устройств/записей не затрагиваются.
+
+**Downgrade:** обратим — реактивировать старые эмоции (`is_active=true`), удалить 100 вставленных по `code`, вернуть `code`/`label_en` уровней 3/5 (`neutral`→`okay`, `awesome`→`great`), переименовать `label_en`→`label`, удалить `label_ru`. Потери данных нет.
+
+**Seed как SoT:** `app/seed/catalog_seed.py` материализует тот же датасет (новые уровни + 100 эмоций с `label_en`/`label_ru`) и остаётся идемпотентным по `code`. Миграция 0005 и seed-скрипт согласованы — оба берут значения из датасета [modules/catalog/emotion_catalog.tsv](modules/catalog/emotion_catalog.tsv).
 
 ## Заметки о консистентности
 

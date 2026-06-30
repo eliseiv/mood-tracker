@@ -36,10 +36,17 @@ async def test_empty_emotions_list_is_valid(client: Any, llm: Any) -> None:
 
 
 async def test_emotion_not_in_mood_level_returns_422(client: Any) -> None:
-    # "anxious" belongs to level 1; mood 5 -> mismatch.
-    r = await client.post(f"{API}/entries", json=entry_body(mood=5, emotions=["anxious"]))
+    # "awesome_joyful" belongs to level 5; mood 1 -> mismatch.
+    r = await client.post(f"{API}/entries", json=entry_body(mood=1, emotions=["awesome_joyful"]))
     assert r.status_code == 422
-    assert "anxious" in r.json()["error"]["details"]["mismatched_emotions"]
+    assert "awesome_joyful" in r.json()["error"]["details"]["mismatched_emotions"]
+
+
+async def test_deactivated_legacy_emotion_code_returns_422_unknown(client: Any) -> None:
+    # Legacy codes (anxious/sad/...) were deactivated by migration 0005 -> unknown.
+    r = await client.post(f"{API}/entries", json=entry_body(mood=1, emotions=["anxious"]))
+    assert r.status_code == 422
+    assert "anxious" in r.json()["error"]["details"]["unknown_emotions"]
 
 
 async def test_unknown_emotion_code_returns_422(client: Any) -> None:
@@ -78,7 +85,7 @@ async def test_description_over_max_chars_returns_422(client: Any) -> None:
 
 async def test_validation_failure_does_not_call_llm(client: Any, llm: Any) -> None:
     # mood mismatch -> 422 must happen before LLM#1.
-    r = await client.post(f"{API}/entries", json=entry_body(mood=5, emotions=["anxious"]))
+    r = await client.post(f"{API}/entries", json=entry_body(mood=1, emotions=["awesome_joyful"]))
     assert r.status_code == 422
     assert llm.chat_calls == []
 

@@ -19,7 +19,9 @@ class MoodScaleLevel(Base):
     id: Mapped[uuid.UUID] = mapped_column(Uuid(), primary_key=True, default=uuid.uuid4)
     value: Mapped[int] = mapped_column(Integer, unique=True, nullable=False)
     code: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
-    label: Mapped[str] = mapped_column(String(100), nullable=False)
+    # Localized labels (ADR-010); ``code`` stays stable and non-localized.
+    label_en: Mapped[str] = mapped_column(String(100), nullable=False)
+    label_ru: Mapped[str] = mapped_column(String(100), nullable=False)
     order: Mapped[int] = mapped_column("order", Integer, nullable=False)
 
 
@@ -30,7 +32,9 @@ class Emotion(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid(), primary_key=True, default=uuid.uuid4)
     code: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
-    label: Mapped[str] = mapped_column(String(100), nullable=False)
+    # Localized labels (ADR-010).
+    label_en: Mapped[str] = mapped_column(String(100), nullable=False)
+    label_ru: Mapped[str] = mapped_column(String(100), nullable=False)
     scale_level_id: Mapped[uuid.UUID] = mapped_column(
         Uuid(), ForeignKey("mood_scale_levels.id", ondelete="CASCADE"), nullable=False
     )

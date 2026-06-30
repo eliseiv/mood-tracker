@@ -1,0 +1,101 @@
+mood_state	order	intensity_score	emotion_en	emotion_ru	suggested_key
+Terrible	1	1	Devastated	Опустошённый	terrible_devastated
+Terrible	2	1	Panicked	В панике	terrible_panicked
+Terrible	3	1	Terrified	В ужасе	terrible_terrified
+Terrible	4	1	Hopeless	Безнадёжный	terrible_hopeless
+Terrible	5	1	Heartbroken	Убитый горем	terrible_heartbroken
+Terrible	6	1	Overwhelmed	Перегруженный	terrible_overwhelmed
+Terrible	7	1	Furious	В ярости	terrible_furious
+Terrible	8	1	Miserable	Несчастный	terrible_miserable
+Terrible	9	1	Helpless	Беспомощный	terrible_helpless
+Terrible	10	1	Trapped	В ловушке	terrible_trapped
+Terrible	11	1	Humiliated	Униженный	terrible_humiliated
+Terrible	12	1	Rejected	Отвергнутый	terrible_rejected
+Terrible	13	1	Desperate	В отчаянии	terrible_desperate
+Terrible	14	1	Anguished	Измученный	terrible_anguished
+Terrible	15	1	Grieving	Скорбящий	terrible_grieving
+Terrible	16	1	Shattered	Разбитый	terrible_shattered
+Terrible	17	1	Enraged	В бешенстве	terrible_enraged
+Terrible	18	1	Dread	В страхе	terrible_dread
+Terrible	19	1	Numb	Оцепеневший	terrible_numb
+Terrible	20	1	Abandoned	Покинутый	terrible_abandoned
+Bad	1	2	Frustrated	Раздражённый	bad_frustrated
+Bad	2	2	Stressed	В стрессе	bad_stressed
+Bad	3	2	Disappointed	Разочарованный	bad_disappointed
+Bad	4	2	Sad	Грустный	bad_sad
+Bad	5	2	Worried	Обеспокоенный	bad_worried
+Bad	6	2	Irritated	Раздосадованный	bad_irritated
+Bad	7	2	Tense	Напряжённый	bad_tense
+Bad	8	2	Discouraged	Обескураженный	bad_discouraged
+Bad	9	2	Insecure	Неуверенный	bad_insecure
+Bad	10	2	Confused	Растерянный	bad_confused
+Bad	11	2	Lonely	Одинокий	bad_lonely
+Bad	12	2	Guilty	Виноватый	bad_guilty
+Bad	13	2	Embarrassed	Смущённый	bad_embarrassed
+Bad	14	2	Jealous	Ревнивый	bad_jealous
+Bad	15	2	Bored	Скучающий	bad_bored
+Bad	16	2	Restless	Беспокойный	bad_restless
+Bad	17	2	Uncomfortable	Некомфортно	bad_uncomfortable
+Bad	18	2	Impatient	Нетерпеливый	bad_impatient
+Bad	19	2	Resentful	Обиженный	bad_resentful
+Bad	20	2	Apathetic	Апатичный	bad_apathetic
+Neutral	1	3	Calm	Спокойный	neutral_calm
+Neutral	2	3	Okay	Нормально	neutral_okay
+Neutral	3	3	Neutral	Нейтральный	neutral_neutral
+Neutral	4	3	Indifferent	Безразличный	neutral_indifferent
+Neutral	5	3	Thoughtful	Задумчивый	neutral_thoughtful
+Neutral	6	3	Curious	Любопытный	neutral_curious
+Neutral	7	3	Focused	Сосредоточенный	neutral_focused
+Neutral	8	3	Tired	Уставший	neutral_tired
+Neutral	9	3	Nostalgic	Ностальгирующий	neutral_nostalgic
+Neutral	10	3	Uncertain	Неуверенный	neutral_uncertain
+Neutral	11	3	Reserved	Сдержанный	neutral_reserved
+Neutral	12	3	Reflective	Размышляющий	neutral_reflective
+Neutral	13	3	Distracted	Рассеянный	neutral_distracted
+Neutral	14	3	Patient	Терпеливый	neutral_patient
+Neutral	15	3	Composed	Уравновешенный	neutral_composed
+Neutral	16	3	Detached	Отстранённый	neutral_detached
+Neutral	17	3	Surprised	Удивлённый	neutral_surprised
+Neutral	18	3	Pensive	Погружённый в мысли	neutral_pensive
+Neutral	19	3	Observant	Наблюдательный	neutral_observant
+Neutral	20	3	Expectant	В ожидании	neutral_expectant
+Good	1	4	Happy	Счастливый	good_happy
+Good	2	4	Relaxed	Расслабленный	good_relaxed
+Good	3	4	Grateful	Благодарный	good_grateful
+Good	4	4	Content	Довольный	good_content
+Good	5	4	Hopeful	С надеждой	good_hopeful
+Good	6	4	Confident	Уверенный	good_confident
+Good	7	4	Motivated	Мотивированный	good_motivated
+Good	8	4	Peaceful	Умиротворённый	good_peaceful
+Good	9	4	Cheerful	Весёлый	good_cheerful
+Good	10	4	Inspired	Вдохновлённый	good_inspired
+Good	11	4	Connected	Близость с людьми	good_connected
+Good	12	4	Supported	Чувствующий поддержку	good_supported
+Good	13	4	Trusting	Доверяющий	good_trusting
+Good	14	4	Warm	С душевным теплом	good_warm
+Good	15	4	Proud	Гордый	good_proud
+Good	16	4	Optimistic	Оптимистичный	good_optimistic
+Good	17	4	Energized	Энергичный	good_energized
+Good	18	4	Interested	Заинтересованный	good_interested
+Good	19	4	Relieved	Испытывающий облегчение	good_relieved
+Good	20	4	Affectionate	Нежный	good_affectionate
+Awesome	1	5	Joyful	Радостный	awesome_joyful
+Awesome	2	5	Excited	В предвкушении	awesome_excited
+Awesome	3	5	Thrilled	В восторге	awesome_thrilled
+Awesome	4	5	Delighted	Очень довольный	awesome_delighted
+Awesome	5	5	Elated	Ликующий	awesome_elated
+Awesome	6	5	Empowered	Уверенный в своих силах	awesome_empowered
+Awesome	7	5	Fulfilled	Реализованный	awesome_fulfilled
+Awesome	8	5	Loved	Любимый	awesome_loved
+Awesome	9	5	Radiant	Сияющий	awesome_radiant
+Awesome	10	5	Enthusiastic	Воодушевлённый	awesome_enthusiastic
+Awesome	11	5	Passionate	Увлечённый	awesome_passionate
+Awesome	12	5	Playful	Игривый	awesome_playful
+Awesome	13	5	Adventurous	Готовый к приключениям	awesome_adventurous
+Awesome	14	5	Blissful	Блаженный	awesome_blissful
+Awesome	15	5	Strong	Сильный	awesome_strong
+Awesome	16	5	Accomplished	Гордый результатом	awesome_accomplished
+Awesome	17	5	Vibrant	Полный жизни	awesome_vibrant
+Awesome	18	5	Free	Свободный	awesome_free
+Awesome	19	5	Overjoyed	Переполненный радостью	awesome_overjoyed
+Awesome	20	5	Ecstatic	В эйфории	awesome_ecstatic

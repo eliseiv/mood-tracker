@@ -94,7 +94,9 @@ def _message_content(entry: MoodEntry, role: MessageRole) -> str:
 
 
 def _emotion_labels(emotions: list[Emotion]) -> str:
-    return ", ".join(emotion.label for emotion in emotions)
+    # English labels for the (English-structured) LLM prompt; the model still
+    # answers in the entry language via the system prompt (ADR-006).
+    return ", ".join(emotion.label_en for emotion in emotions)
 
 
 def _ensure_finishable(entry: MoodEntry) -> None:

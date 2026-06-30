@@ -22,7 +22,7 @@ pytestmark = pytest.mark.asyncio
 
 async def test_create_entry_response_schema(client: Any, llm: Any) -> None:
     llm.set_followup("What hurt most?")
-    r = await client.post(f"{API}/entries", json=entry_body(mood=4, emotions=["happy"]))
+    r = await client.post(f"{API}/entries", json=entry_body(mood=4, emotions=["good_happy"]))
     model = CreateEntryResponse.model_validate(r.json())
     assert model.status.value == "awaiting_answer"
     assert model.prompt_version == "v1"
